@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checklist</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 24px;
+}
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+
+h1 { font-size: 11px; font-weight: 600; color: #aaa; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.status {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa;
+  cursor: pointer; user-select: none; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid #e0ddd6; background: #fff;
+}
+.status:hover { background: #f5f4f0; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+.dot.connected { background: #3B6D11; }
+.dot.error { background: #c0392b; }
+.dot.syncing { background: #e6a817; }
+
+.setup-panel {
+  background: #fff; border: 1px solid #e8e6e0; border-radius: 10px;
+  padding: 20px; margin-bottom: 16px; display: none;
+}
+.setup-panel.open { display: block; }
+.setup-panel h2 { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 14px; }
+.setup-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.setup-row label { font-size: 12px; color: #888; width: 60px; flex-shrink: 0; }
+.setup-row input {
+  flex: 1; font-size: 12px; padding: 5px 10px; border: 1px solid #e0ddd6;
+  border-radius: 6px; background: #faf9f6; color: #1a1a1a; outline: none; font-family: inherit;
+}
+.setup-row input:focus { border-color: #bbb; background: #fff; }
+.setup-hint { font-size: 11px; color: #bbb; margin-top: 4px; line-height: 1.5; }
+.setup-hint a { color: #3B6D11; text-decoration: none; }
+.setup-hint a:hover { text-decoration: underline; }
+.btn-connect {
+  font-size: 12px; padding: 6px 14px; border: 1px solid #3B6D11; border-radius: 6px;
+  background: #3B6D11; color: #fff; cursor: pointer; font-family: inherit; margin-top: 6px;
+}
+.btn-connect:hover { background: #27500A; }
+.btn-connect:disabled { opacity: 0.5; cursor: default; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px; align-items: start;
+}
+
+.col {
+  background: #fff; border-radius: 10px; border: 1px solid #e8e6e0;
+  display: flex; flex-direction: column; min-height: 280px;
+  transition: opacity 0.15s;
+}
+.col.dragging-col { opacity: 0.4; }
+.col.drag-col-left { box-shadow: -3px 0 0 0 #3B6D11; }
+.col.drag-col-right { box-shadow: 3px 0 0 0 #3B6D11; }
+
+.col-header {
+  padding: 13px 16px; font-size: 13px; font-weight: 600; color: #1a1a1a;
+  text-transform: capitalize; border-bottom: 1px solid #e8e6e0; flex-shrink: 0;
+  cursor: grab; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+.col-header:active { cursor: grabbing; }
+.col-header .col-title { flex: 1; }
+.col-header .col-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.12s; }
+.col-header:hover .col-actions { opacity: 1; }
+
+.col-header-edit {
+  flex: 1; font-size: 13px; font-weight: 600; font-family: inherit;
+  color: #1a1a1a; border: 1px solid #bbb; border-radius: 4px;
+  padding: 1px 6px; outline: none; background: #fff;
+}
+
+.section { display: flex; flex-direction: column; flex-shrink: 0; }
+.section-today { border-bottom: 1px solid #eceae4; min-height: 48px; padding-bottom: 8px; }
+.section-bucket { background: #faf9f6; border-radius: 0 0 10px 10px; min-height: 60px; flex: 1; }
+
+.section-label {
+  padding: 14px 16px 8px; font-size: 10px; font-weight: 600; color: #bbb;
+  letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.items-list {
+  max-height: 320px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #ddd transparent;
+}
+.items-list::-webkit-scrollbar { width: 4px; }
+.items-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+.item-row {
+  display: flex; align-items: center; padding: 7px 16px; gap: 8px;
+  cursor: grab; user-select: none; transition: background 0.08s;
+}
+.item-row:active { cursor: grabbing; }
+.item-row:hover { background: rgba(0,0,0,0.02); }
+.item-row:hover .actions { opacity: 1; }
+.item-row.done-row { background: #EAF3DE; border-radius: 5px; margin: 0 8px; padding: 7px 8px; }
+.item-row.flipping { transition: transform 0.2s cubic-bezier(0.2,0,0.2,1); }
+.item-row.drag-source { opacity: 0.32; }
+.item-row.drag-source .item-text { color: #aaa; }
+.item-row.drag-source .tick-box { opacity: 0.4; }
+.drag-clone {
+  position: fixed; z-index: 1000; pointer-events: none;
+  border-radius: 7px; box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  background: #fff; cursor: grabbing;
+  transform: scale(1.02);
+  padding: 7px 16px;
+}
+.drag-clone.done-row { background: #EAF3DE; }
+.drag-clone .actions { display: none; }
+
+
+.item-text { flex: 1; font-size: 13.5px; color: #1a1a1a; line-height: 1.4; cursor: text; }
+.item-text.muted { color: #777; }
+.item-text.done {
+  text-decoration: line-through; text-decoration-color: #3B6D11;
+  text-decoration-thickness: 2px; color: #3B6D11;
+}
+
+.actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.12s; flex-shrink: 0; }
+.btn-icon {
+  background: none; border: none; cursor: pointer; color: #bbb;
+  padding: 3px; border-radius: 4px; display: flex; align-items: center;
+}
+.btn-icon:hover { color: #444; background: #eeece8; }
+
+.add-row {
+  display: flex; gap: 6px; padding: 8px 16px 14px; margin-top: auto; flex-shrink: 0;
+}
+.add-input {
+  flex: 1; font-size: 13px; padding: 5px 10px; border: 1px solid #e0ddd6;
+  border-radius: 6px; background: #fff; color: #1a1a1a; outline: none; font-family: inherit;
+}
+.add-input:focus { border-color: #bbb; }
+.add-input::placeholder { color: #ccc; }
+.add-btn {
+  padding: 5px 10px; border: 1px solid #e0ddd6; border-radius: 6px;
+  background: #fff; cursor: pointer; color: #999;
+  display: flex; align-items: center; justify-content: center;
+}
+.add-btn:hover { background: #eeece8; color: #444; }
+
+.tick-box {
+  width: 15px; height: 15px; border-radius: 50%; border: 2px solid #ccc;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.12s;
+}
+.tick-box.done { background: #3B6D11; border-color: #3B6D11; }
+.tick-box svg { display: none; }
+.tick-box.done svg { display: block; }
+
+.edit-input {
+  flex: 1; font-size: 13.5px; font-family: inherit; color: #1a1a1a;
+  background: #fff; border: 1px solid #bbb; border-radius: 4px;
+  padding: 1px 6px; outline: none; line-height: 1.4;
+}
+
+.confirm-delete {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3); display: flex;
+  align-items: center; justify-content: center; z-index: 100;
+}
+.confirm-box {
+  background: #fff; border-radius: 10px; padding: 20px 24px;
+  max-width: 340px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+.confirm-box p { font-size: 13.5px; color: #1a1a1a; margin-bottom: 16px; line-height: 1.5; }
+.confirm-box .confirm-item { font-weight: 600; }
+.confirm-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.confirm-btns button {
+  font-size: 12px; padding: 6px 14px; border-radius: 6px;
+  cursor: pointer; font-family: inherit; border: 1px solid #e0ddd6;
+}
+.btn-cancel { background: #fff; color: #555; }
+.btn-cancel:hover { background: #f5f4f0; }
+.btn-delete { background: #c0392b; color: #fff; border-color: #c0392b; }
+.btn-delete:hover { background: #a93226; }
+
+.add-col-card {
+  background: #fff; border-radius: 10px; border: 2px dashed #ddd;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 280px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  flex-direction: column; gap: 8px; color: #bbb; font-size: 13px;
+}
+.add-col-card:hover { border-color: #aaa; background: #faf9f6; color: #888; }
+.add-col-card svg { opacity: 0.5; }
+.add-col-card:hover svg { opacity: 0.8; }
+
+.new-cat-input {
+  font-size: 13px; padding: 6px 12px; border: 1px solid #bbb; border-radius: 6px;
+  outline: none; font-family: inherit; color: #1a1a1a; width: 160px; text-align: center;
+}
+.new-cat-input::placeholder { color: #ccc; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Checklist</h1>
+  <div class="status" id="status" onclick="toggleSetup()">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">not connected</span>
+  </div>
+</div>
+
+<div class="setup-panel" id="setup-panel">
+  <h2>Connect to JSONBin</h2>
+  <div class="setup-row">
+    <label>API key</label>
+    <input type="password" id="cfg-key" placeholder="$2a$10$..." autocomplete="off" />
+  </div>
+  <div class="setup-row">
+    <label>Bin ID</label>
+    <input type="text" id="cfg-bin" placeholder="leave empty to create new" autocomplete="off" />
+  </div>
+  <button class="btn-connect" id="btn-connect" onclick="doConnect()">Connect</button>
+  <div class="setup-hint" style="margin-top:12px">
+    Get a free API key at <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> &rarr; API Keys &rarr; Master Key.<br>
+    Leave Bin ID empty on first use - it will be created for you.
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+<div id="modal-root"></div>
+
+<script>
+const CFG_KEY = "checklist-cfg";
+const JSONBIN = "https://api.jsonbin.io/v3";
+
+let cats = ["house", "general", "refunds", "buy"];
+let items = {
+  house:   { today: ["Put luggage away"], bucket: [] },
+  general: { today: ["Taxes"], bucket: ["Biodryze bread", "Wand"] },
+  refunds: { today: [], bucket: [] },
+  buy:     { today: [], bucket: [] }
+};
+let doneState = {};
+let inputVals = {};
+let cfg = { key: "", binId: "" };
+let saveTimer = null, isConnected = false;
+
+// Drag state - columns
+let dragColIdx = null;
+
+const icons = {
+  up:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
+  down: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
+  x:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  plus: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`
+};
+
+// ---- Status & Config ----
+function setStatus(s, t) {
+  document.getElementById("dot").className = "dot" + (s ? " " + s : "");
+  document.getElementById("status-text").textContent = t;
+}
+function toggleSetup() {
+  const p = document.getElementById("setup-panel"); p.classList.toggle("open");
+  if (p.classList.contains("open")) {
+    document.getElementById("cfg-key").value = cfg.key;
+    document.getElementById("cfg-bin").value = cfg.binId;
+  }
+}
+function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch(e) {} }
+function loadCfg() { try { const s = localStorage.getItem(CFG_KEY); if (s) cfg = JSON.parse(s); } catch(e) {} }
+
+// ---- JSONBin ----
+function getPayload() { return { cats, items, done: doneState }; }
+
+function loadPayload(record) {
+  if (record.cats && record.items) {
+    cats = record.cats;
+    items = record.items;
+    doneState = record.done || {};
+  } else if (record.items && !record.cats) {
+    // migration from old format
+    cats = Object.keys(record.items);
+    items = record.items;
+    doneState = record.done || {};
+  } else {
+    // oldest format - items directly
+    cats = Object.keys(record);
+    items = record;
+    doneState = {};
+  }
+}
+
+async function doConnect() {
+  const key = document.getElementById("cfg-key").value.trim();
+  const binId = document.getElementById("cfg-bin").value.trim();
+  if (!key) { alert("Please enter your API key."); return; }
+  const btn = document.getElementById("btn-connect");
+  btn.disabled = true; btn.textContent = "Connecting...";
+  setStatus("syncing", "connecting...");
+  cfg.key = key;
+  try {
+    if (binId) { cfg.binId = binId; await fetchData(); }
+    else { await createBin(); }
+    saveCfg(); isConnected = true;
+    setStatus("connected", "connected - " + cfg.binId.slice(-6));
+    document.getElementById("cfg-bin").value = cfg.binId;
+    document.getElementById("setup-panel").classList.remove("open");
+    render();
+  } catch(e) {
+    setStatus("error", "connection failed");
+    alert("Could not connect.\n\n" + e.message);
+  }
+  btn.disabled = false; btn.textContent = "Connect";
+}
+
+async function createBin() {
+  const res = await fetch(JSONBIN + "/b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Master-Key": cfg.key, "X-Bin-Name": "checklist", "X-Bin-Private": "true" },
+    body: JSON.stringify(getPayload())
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  cfg.binId = (await res.json()).metadata.id;
+}
+
+async function fetchData() {
+  const res = await fetch(JSONBIN + "/b/" + cfg.binId + "/latest", { headers: { "X-Master-Key": cfg.key } });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  loadPayload((await res.json()).record);
+}
+
+async function pushData() {
+  if (!isConnected) return;
+  setStatus("syncing", "saving...");
+  try {
+    const res = await fetch(JSONBIN + "/b/" + cfg.binId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": cfg.key },
+      body: JSON.stringify(getPayload())
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    setStatus("connected", "saved - " + cfg.binId.slice(-6));
+  } catch(e) { setStatus("error", "save failed"); }
+}
+
+function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(pushData, 800); }
+
+// ---- Confirm ----
+function showConfirm(msg, onYes) {
+  const root = document.getElementById("modal-root");
+  root.innerHTML = `<div class="confirm-delete" id="confirm-overlay">
+    <div class="confirm-box">
+      <p>${msg}</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel" id="confirm-no">Cancel</button>
+        <button class="btn-delete" id="confirm-yes">Delete</button>
+      </div>
+    </div></div>`;
+  document.getElementById("confirm-no").onclick = () => root.innerHTML = "";
+  document.getElementById("confirm-yes").onclick = () => { root.innerHTML = ""; onYes(); };
+  document.getElementById("confirm-overlay").onclick = e => {
+    if (e.target.id === "confirm-overlay") root.innerHTML = "";
+  };
+}
+
+// ---- Category management ----
+function addCategory(name) {
+  const key = name.trim();
+  if (!key) return;
+  const id = key.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "cat_" + Date.now();
+  if (items[id]) { alert("A category with a similar name already exists."); return; }
+  cats.push(id);
+  items[id] = { today: [], bucket: [] };
+  // Store display name
+  if (!window._catNames) window._catNames = {};
+  window._catNames[id] = key;
+  scheduleSave(); render();
+}
+
+function renameCategory(oldId, newName) {
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  const newId = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  if (newId === oldId) {
+    if (!window._catNames) window._catNames = {};
+    window._catNames[oldId] = trimmed;
+    scheduleSave(); render(); return;
+  }
+  if (items[newId] && newId !== oldId) { alert("A category with that name already exists."); render(); return; }
+  const idx = cats.indexOf(oldId);
+  if (idx === -1) return;
+  cats[idx] = newId;
+  items[newId] = items[oldId];
+  delete items[oldId];
+  // migrate done keys
+  const newDone = {};
+  Object.keys(doneState).forEach(k => {
+    if (k.startsWith(oldId + "::")) {
+      newDone[newId + "::" + k.slice(oldId.length + 2)] = doneState[k];
+    } else {
+      newDone[k] = doneState[k];
+    }
+  });
+  doneState = newDone;
+  if (!window._catNames) window._catNames = {};
+  window._catNames[newId] = trimmed;
+  delete window._catNames[oldId];
+  scheduleSave(); render();
+}
+
+function deleteCategory(cat) {
+  const displayName = getCatDisplay(cat);
+  showConfirm(`Delete <span class="confirm-item">${displayName.replace(/</g,"&lt;")}</span> and all its items?`, () => {
+    cats = cats.filter(c => c !== cat);
+    // clean done state
+    Object.keys(doneState).forEach(k => { if (k.startsWith(cat + "::")) delete doneState[k]; });
+    delete items[cat];
+    scheduleSave(); render();
+  });
+}
+
+function getCatDisplay(id) {
+  if (window._catNames && window._catNames[id]) return window._catNames[id];
+  return id.replace(/_/g, " ");
+}
+
+// ---- Item actions ----
+function moveToToday(cat, item) {
+  items[cat].bucket = items[cat].bucket.filter(x => x !== item);
+  items[cat].today.push(item);
+  scheduleSave(); render();
+}
+function moveToBucket(cat, item) {
+  items[cat].today = items[cat].today.filter(x => x !== item);
+  items[cat].bucket.push(item);
+  delete doneState[cat + "::" + item];
+  scheduleSave(); render();
+}
+function deleteItem(cat, sec, item) {
+  showConfirm(`Delete <span class="confirm-item">${item.replace(/</g,"&lt;")}</span>?`, () => {
+    items[cat][sec] = items[cat][sec].filter(x => x !== item);
+    delete doneState[cat + "::" + item];
+    scheduleSave(); render();
+  });
+}
+function addItem(cat) {
+  const v = (inputVals[cat] || "").trim();
+  if (!v) return;
+  items[cat].bucket.push(v);
+  inputVals[cat] = "";
+  scheduleSave(); render();
+  requestAnimationFrame(() => {
+    const inp = document.querySelector(`[data-add-cat="${cat}"]`);
+    if (inp) inp.focus();
+  });
+}
+function editItem(cat, sec, oldItem, newItem) {
+  const idx = items[cat][sec].indexOf(oldItem);
+  if (idx === -1 || !newItem.trim()) return;
+  const k = cat + "::" + oldItem;
+  const wasDone = doneState[k]; delete doneState[k];
+  items[cat][sec][idx] = newItem.trim();
+  if (wasDone) doneState[cat + "::" + newItem.trim()] = true;
+  scheduleSave(); render();
+}
+function toggleDone(cat, item) {
+  const k = cat + "::" + item;
+  const becomingDone = !doneState[k];
+  const arr = items[cat].today;
+  const curIdx = arr.indexOf(item);
+  if (curIdx !== -1) arr.splice(curIdx, 1);
+  if (becomingDone) doneState[k] = true;
+  else delete doneState[k];
+  let doneCount = 0;
+  for (const it of arr) { if (doneState[cat + "::" + it]) doneCount++; }
+  arr.splice(doneCount, 0, item);
+  scheduleSave(); render();
+}
+
+// ---- Item drag & drop (pointer-based) ----
+let itemDrag = null;
+
+function onRowPointerDown(e, cat, sec, rowEl) {
+  if (e.button !== 0) return;
+  const t = e.target;
+  if (t.closest(".actions") || t.closest(".tick-box") || t.tagName === "INPUT") return;
+  itemDrag = {
+    cat, sec, item: rowEl.getAttribute("data-item"),
+    rowEl, listEl: rowEl.parentElement,
+    startX: e.clientX, startY: e.clientY,
+    active: false, clone: null, offsetX: 0, offsetY: 0,
+    curIdx: null, lastTarget: -1
+  };
+  window.addEventListener("pointermove", onItemPointerMove);
+  window.addEventListener("pointerup", onItemPointerUp);
+}
+
+function startItemDrag(e) {
+  itemDrag.active = true;
+  const row = itemDrag.rowEl;
+  const rect = row.getBoundingClientRect();
+  itemDrag.offsetX = itemDrag.startX - rect.left;
+  itemDrag.offsetY = itemDrag.startY - rect.top;
+
+  const clone = row.cloneNode(true);
+  clone.className = "item-row drag-clone" + (row.classList.contains("done-row") ? " done-row" : "");
+  clone.style.width = rect.width + "px";
+  clone.style.left = rect.left + "px";
+  clone.style.top = rect.top + "px";
+  document.body.appendChild(clone);
+  itemDrag.clone = clone;
+
+  row.classList.add("drag-source");
+  document.body.style.userSelect = "none";
+}
+
+function captureListPos(list) {
+  const map = new Map();
+  list.querySelectorAll(".item-row").forEach(el => {
+    map.set(el, el.getBoundingClientRect());
+  });
+  return map;
+}
+
+function animateListPos(list, oldPos) {
+  list.querySelectorAll(".item-row").forEach(el => {
+    const oldRect = oldPos.get(el);
+    if (!oldRect) return;
+    const newRect = el.getBoundingClientRect();
+    const dy = oldRect.top - newRect.top;
+    if (Math.abs(dy) < 1) return;
+    el.classList.remove("flipping");
+    el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      el.classList.add("flipping");
+      el.style.transform = "";
+    });
+  });
+}
+
+function onItemPointerMove(e) {
+  if (!itemDrag) return;
+  if (!itemDrag.active) {
+    if (Math.hypot(e.clientX - itemDrag.startX, e.clientY - itemDrag.startY) < 5) return;
+    startItemDrag(e);
+  }
+  itemDrag.clone.style.left = (e.clientX - itemDrag.offsetX) + "px";
+  itemDrag.clone.style.top = (e.clientY - itemDrag.offsetY) + "px";
+
+  const list = itemDrag.listEl;
+  const others = [...list.querySelectorAll(".item-row")].filter(r => r !== itemDrag.rowEl);
+  let target = others.length;
+  for (let i = 0; i < others.length; i++) {
+    const rect = others[i].getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 2) { target = i; break; }
+  }
+  if (target === itemDrag.lastTarget) return;
+  itemDrag.lastTarget = target;
+  itemDrag.curIdx = target;
+
+  const oldPos = captureListPos(list);
+  if (target >= others.length) list.appendChild(itemDrag.rowEl);
+  else list.insertBefore(itemDrag.rowEl, others[target]);
+  animateListPos(list, oldPos);
+}
+
+function onItemPointerUp(e) {
+  window.removeEventListener("pointermove", onItemPointerMove);
+  window.removeEventListener("pointerup", onItemPointerUp);
+  if (!itemDrag) return;
+
+  if (itemDrag.active) {
+    const arr = items[itemDrag.cat][itemDrag.sec];
+    const from = arr.indexOf(itemDrag.item);
+    let to = itemDrag.curIdx != null ? itemDrag.curIdx : from;
+    if (from !== -1) {
+      arr.splice(from, 1);
+      arr.splice(to, 0, itemDrag.item);
+    }
+    const finalRect = itemDrag.rowEl.getBoundingClientRect();
+    const clone = itemDrag.clone;
+    clone.style.transition = "left 0.16s ease, top 0.16s ease, transform 0.16s ease";
+    clone.style.left = finalRect.left + "px";
+    clone.style.top = finalRect.top + "px";
+    clone.style.transform = "scale(1)";
+    setTimeout(() => { if (clone.parentElement) clone.remove(); }, 180);
+    document.body.style.userSelect = "";
+    scheduleSave(); render();
+  } else {
+    document.body.style.userSelect = "";
+  }
+  itemDrag = null;
+}
+
+// ---- Column drag & drop ----
+function onColDragStart(e, idx) {
+  dragColIdx = idx;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", "col");
+  requestAnimationFrame(() => {
+    const cols = document.querySelectorAll(".col");
+    if (cols[idx]) cols[idx].classList.add("dragging-col");
+  });
+}
+function onColDragEnd(e) {
+  document.querySelectorAll(".dragging-col,.drag-col-left,.drag-col-right").forEach(el =>
+    el.classList.remove("dragging-col","drag-col-left","drag-col-right"));
+  dragColIdx = null;
+}
+function onColDragOver(e, idx) {
+  if (dragColIdx === null || dragColIdx === idx) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  const col = e.currentTarget, rect = col.getBoundingClientRect(), mid = rect.left + rect.width / 2;
+  col.classList.remove("drag-col-left","drag-col-right");
+  col.classList.add(e.clientX < mid ? "drag-col-left" : "drag-col-right");
+}
+function onColDragLeave(e) { e.currentTarget.classList.remove("drag-col-left","drag-col-right"); }
+function onColDrop(e, targetIdx) {
+  e.preventDefault();
+  if (dragColIdx === null || dragColIdx === targetIdx) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  let insertAt = e.clientX < rect.left + rect.width / 2 ? targetIdx : targetIdx + 1;
+  const [cat] = cats.splice(dragColIdx, 1);
+  if (insertAt > dragColIdx) insertAt--;
+  cats.splice(insertAt, 0, cat);
+  scheduleSave(); render();
+}
+
+// ---- Render ----
+function makeItemRow(cat, sec, item, idx) {
+  const k = cat + "::" + item, isDone = !!doneState[k];
+  const row = document.createElement("div");
+  row.className = "item-row" + (isDone ? " done-row" : "");
+  row.setAttribute("data-flip-key", cat + "||" + item);
+  row.setAttribute("data-item", item);
+  row.addEventListener("pointerdown", e => onRowPointerDown(e, cat, sec, row));
+
+  if (sec === "today") {
+    const tick = document.createElement("div");
+    tick.className = "tick-box" + (isDone ? " done" : "");
+    tick.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    tick.addEventListener("click", e => { e.stopPropagation(); toggleDone(cat, item); });
+    row.appendChild(tick);
+  }
+
+  const span = document.createElement("span");
+  span.className = "item-text" + (sec === "bucket" ? " muted" : "") + (isDone ? " done" : "");
+  span.textContent = item;
+  span.title = "Double-click to edit";
+  span.addEventListener("dblclick", e => {
+    e.stopPropagation();
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.className = "edit-input"; inp.value = item;
+    span.replaceWith(inp); inp.focus(); inp.select();
+    const commit = () => {
+      const val = inp.value.trim();
+      if (val && val !== item) editItem(cat, sec, item, val); else render();
+    };
+    inp.addEventListener("blur", commit);
+    inp.addEventListener("keydown", e => {
+      if (e.key === "Enter") inp.blur();
+      if (e.key === "Escape") render();
+    });
+  });
+  row.appendChild(span);
+
+  const actions = document.createElement("div"); actions.className = "actions";
+  const moveBtn = document.createElement("button"); moveBtn.className = "btn-icon";
+  if (sec === "bucket") {
+    moveBtn.title = "Move to today"; moveBtn.innerHTML = icons.up;
+    moveBtn.addEventListener("click", e => { e.stopPropagation(); moveToToday(cat, item); });
+  } else {
+    moveBtn.title = "Move to bucket"; moveBtn.innerHTML = icons.down;
+    moveBtn.addEventListener("click", e => { e.stopPropagation(); moveToBucket(cat, item); });
+  }
+  actions.appendChild(moveBtn);
+  const delBtn = document.createElement("button"); delBtn.className = "btn-icon";
+  delBtn.title = "Delete"; delBtn.innerHTML = icons.x;
+  delBtn.addEventListener("click", e => { e.stopPropagation(); deleteItem(cat, sec, item); });
+  actions.appendChild(delBtn);
+  row.appendChild(actions);
+  return row;
+}
+
+// ---- FLIP animation ----
+function capturePositions() {
+  const map = new Map();
+  document.querySelectorAll("[data-flip-key]").forEach(el => {
+    map.set(el.getAttribute("data-flip-key"), el.getBoundingClientRect());
+  });
+  return map;
+}
+
+function animatePositions(oldPos) {
+  document.querySelectorAll("[data-flip-key]").forEach(el => {
+    const key = el.getAttribute("data-flip-key");
+    const oldRect = oldPos.get(key);
+    if (!oldRect) return;
+    const newRect = el.getBoundingClientRect();
+    const dy = oldRect.top - newRect.top;
+    if (Math.abs(dy) < 1) return;
+    el.classList.remove("flipping");
+    el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      el.classList.add("flipping");
+      el.style.transform = "";
+      el.addEventListener("transitionend", () => {
+        el.classList.remove("flipping");
+      }, { once: true });
+    });
+  });
+}
+
+function render() {
+  const oldPos = capturePositions();
+  renderDOM();
+  animatePositions(oldPos);
+}
+
+function renderDOM() {
+  const grid = document.getElementById("grid"); grid.innerHTML = "";
+
+  cats.forEach((cat, colIdx) => {
+    if (!items[cat]) items[cat] = { today: [], bucket: [] };
+    const col = document.createElement("div"); col.className = "col";
+
+    // Column drag
+    col.addEventListener("dragover", e => { if (dragColIdx !== null) onColDragOver(e, colIdx); });
+    col.addEventListener("dragleave", e => { if (dragColIdx !== null) onColDragLeave(e); });
+    col.addEventListener("drop", e => { if (dragColIdx !== null) onColDrop(e, colIdx); });
+
+    // Header
+    const hdr = document.createElement("div"); hdr.className = "col-header";
+    hdr.draggable = true;
+    hdr.addEventListener("dragstart", e => {
+      // Only start col drag if not dragging an item
+      if (e.target === hdr || e.target.classList.contains("col-title")) {
+        onColDragStart(e, colIdx);
+      }
+    });
+    hdr.addEventListener("dragend", onColDragEnd);
+
+    const title = document.createElement("span"); title.className = "col-title";
+    title.textContent = getCatDisplay(cat);
+    title.addEventListener("dblclick", () => {
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.className = "col-header-edit";
+      inp.value = getCatDisplay(cat);
+      title.replaceWith(inp); inp.focus(); inp.select();
+      hdr.draggable = false;
+      const commit = () => {
+        hdr.draggable = true;
+        const val = inp.value.trim();
+        if (val && val.toLowerCase().replace(/[^a-z0-9]+/g,"_") !== cat) renameCategory(cat, val);
+        else if (val) {
+          if (!window._catNames) window._catNames = {};
+          window._catNames[cat] = val;
+          render();
+        } else render();
+      };
+      inp.addEventListener("blur", commit);
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Enter") inp.blur();
+        if (e.key === "Escape") { hdr.draggable = true; render(); }
+      });
+    });
+    hdr.appendChild(title);
+
+    const colActions = document.createElement("div"); colActions.className = "col-actions";
+    const delColBtn = document.createElement("button"); delColBtn.className = "btn-icon";
+    delColBtn.title = "Delete category"; delColBtn.innerHTML = icons.x;
+    delColBtn.addEventListener("click", e => { e.stopPropagation(); deleteCategory(cat); });
+    colActions.appendChild(delColBtn);
+    hdr.appendChild(colActions);
+    col.appendChild(hdr);
+
+    ["today", "bucket"].forEach(sec => {
+      const section = document.createElement("div"); section.className = "section section-" + sec;
+      const lbl = document.createElement("div"); lbl.className = "section-label";
+      const lblText = document.createElement("span"); lblText.textContent = sec;
+      lbl.appendChild(lblText);
+      section.appendChild(lbl);
+
+      const list = document.createElement("div"); list.className = "items-list";
+      const arr = items[cat][sec];
+      arr.forEach((item, idx) => list.appendChild(makeItemRow(cat, sec, item, idx)));
+      section.appendChild(list);
+
+      if (sec === "bucket") {
+        const addRow = document.createElement("div"); addRow.className = "add-row";
+        const inp = document.createElement("input");
+        inp.type = "text"; inp.className = "add-input";
+        inp.placeholder = "add item..."; inp.value = inputVals[cat] || "";
+        inp.setAttribute("data-add-cat", cat);
+        inp.addEventListener("input", e => { inputVals[cat] = e.target.value; });
+        inp.addEventListener("keydown", e => { if (e.key === "Enter") addItem(cat); });
+        const btn = document.createElement("button");
+        btn.className = "add-btn"; btn.title = "Add"; btn.innerHTML = icons.plus;
+        btn.addEventListener("click", () => addItem(cat));
+        addRow.appendChild(inp); addRow.appendChild(btn);
+        section.appendChild(addRow);
+      }
+      col.appendChild(section);
+    });
+    grid.appendChild(col);
+  });
+
+  // Add category card
+  const addCard = document.createElement("div"); addCard.className = "add-col-card";
+  addCard.id = "add-col-card";
+  addCard.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>add category</span>`;
+  addCard.addEventListener("click", () => {
+    if (document.querySelector(".new-cat-input")) return;
+    addCard.innerHTML = "";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.className = "new-cat-input"; inp.placeholder = "category name...";
+    addCard.appendChild(inp); inp.focus();
+    const commit = () => {
+      const val = inp.value.trim();
+      if (val) addCategory(val); else render();
+    };
+    inp.addEventListener("blur", commit);
+    inp.addEventListener("keydown", e => {
+      if (e.key === "Enter") inp.blur();
+      if (e.key === "Escape") render();
+    });
+  });
+  grid.appendChild(addCard);
+}
+
+// ---- Init ----
+async function init() {
+  loadCfg();
+  if (cfg.key && cfg.binId) {
+    setStatus("syncing", "loading...");
+    try {
+      await fetchData(); isConnected = true;
+      setStatus("connected", "connected - " + cfg.binId.slice(-6));
+    } catch(e) {
+      setStatus("error", "load failed");
+      document.getElementById("setup-panel").classList.add("open");
+      document.getElementById("cfg-key").value = cfg.key;
+      document.getElementById("cfg-bin").value = cfg.binId;
+    }
+  } else {
+    document.getElementById("setup-panel").classList.add("open");
+    setStatus("", "not connected");
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
