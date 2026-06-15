@@ -486,6 +486,16 @@ function toggleDone(cat, item) {
   scheduleSave(); render();
 }
 
+function completeBucketItem(cat, item) {
+  items[cat].bucket = items[cat].bucket.filter(x => x !== item);
+  doneState[cat + "::" + item] = true;
+  const arr = items[cat].today;
+  let doneCount = 0;
+  for (const it of arr) { if (doneState[cat + "::" + it]) doneCount++; }
+  arr.splice(doneCount, 0, item);
+  scheduleSave(); render();
+}
+
 // ---- Item drag & drop (pointer-based) ----
 let itemDrag = null;
 
@@ -649,6 +659,12 @@ function makeItemRow(cat, sec, item, idx) {
     tick.className = "tick-box" + (isDone ? " done" : "");
     tick.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     tick.addEventListener("click", e => { e.stopPropagation(); toggleDone(cat, item); });
+    row.appendChild(tick);
+  } else {
+    const tick = document.createElement("div");
+    tick.className = "tick-box";
+    tick.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    tick.addEventListener("click", e => { e.stopPropagation(); completeBucketItem(cat, item); });
     row.appendChild(tick);
   }
 
