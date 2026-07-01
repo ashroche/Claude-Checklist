@@ -238,7 +238,10 @@ h1 { font-size: 11px; font-weight: 600; color: #aaa; letter-spacing: 0.1em; text
 <div id="modal-root"></div>
 
 <script>
-const CFG_KEY = "checklist-cfg";
+const APP_ID = "personal";
+const DEFAULT_BIN = "6a1608c9f47d5c455c3a979c";
+const APIKEY_STORE = "checklist-apikey";
+const BINID_STORE = "checklist-binid-" + APP_ID;
 const JSONBIN = "https://api.jsonbin.io/v3";
 
 let cats = ["house", "general", "refunds", "buy"];
@@ -275,8 +278,15 @@ function toggleSetup() {
     document.getElementById("cfg-bin").value = cfg.binId;
   }
 }
-function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch(e) {} }
-function loadCfg() { try { const s = localStorage.getItem(CFG_KEY); if (s) cfg = JSON.parse(s); } catch(e) {} }
+function saveCfg() { try { localStorage.setItem(APIKEY_STORE, cfg.key); localStorage.setItem(BINID_STORE, cfg.binId); } catch(e) {} }
+function loadCfg() {
+  try {
+    let k = localStorage.getItem(APIKEY_STORE);
+    if (!k) { const old = localStorage.getItem("checklist-cfg"); if (old) { try { k = JSON.parse(old).key || ""; } catch(e) {} } }
+    cfg.key = k || "";
+    cfg.binId = localStorage.getItem(BINID_STORE) || DEFAULT_BIN;
+  } catch(e) { cfg.binId = DEFAULT_BIN; }
+}
 
 // ---- JSONBin ----
 function getPayload() { return { cats, items, done: doneState }; }
@@ -869,6 +879,8 @@ async function init() {
     }
   } else {
     document.getElementById("setup-panel").classList.add("open");
+    document.getElementById("cfg-key").value = cfg.key;
+    document.getElementById("cfg-bin").value = cfg.binId;
     setStatus("", "not connected");
   }
   render();
